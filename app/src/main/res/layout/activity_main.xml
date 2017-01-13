@@ -4,12 +4,25 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#d9d9d9"
+    android:clipChildren="false"
     tools:context=".MainActivity">
 
     <com.monkey.dragpopview.DragBubbleView
         android:id="@+id/dragBubbleView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        monkey:text="99+" />
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        monkey:bubbleColor="#ff0000"
+        monkey:bubbleRadius="16dp"
+        monkey:textColor="#ffffff"
+        monkey:textSize="16sp" />
 
+    <Button
+        android:id="@+id/reCreateBtn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="@dimen/activity_horizontal_margin"
+        android:text="reCreate" />
 </RelativeLayout>

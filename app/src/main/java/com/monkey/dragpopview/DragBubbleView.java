@@ -5,6 +5,8 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -14,7 +16,7 @@ import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.animation.AnticipateOvershootInterpolator;
+import android.view.animation.LinearInterpolator;
 import android.view.animation.OvershootInterpolator;
 
 /**
@@ -26,6 +28,8 @@ public class DragBubbleView extends View {
     private Path mBezierPath;
     private Paint mTextPaint;
     private Rect mTextRect;
+    private Paint mExplosionPaint;
+    private Rect mExplosionRect;
 
     /* 黏连小圆的半径 */
     private float mCircleRadius;
@@ -73,6 +77,16 @@ public class DragBubbleView extends View {
     /* 贝塞尔曲线控制点纵坐标 */
     private float mControlY;
 
+    /* 气泡爆炸的图片id数组 */
+    private int[] mExplosionDrawables = {R.drawable.explosion_one, R.drawable.explosion_two
+            , R.drawable.explosion_three, R.drawable.explosion_four, R.drawable.explosion_five};
+    /* 气泡爆炸的bitmap数组 */
+    private Bitmap[] mExplosionBitmaps;
+    /* 气泡爆炸当前进行到第几张 */
+    private int mCurExplosionIndex;
+    /* 气泡爆炸动画是否开始 */
+    private boolean mIsExplosionAnimStart = false;
+
     /* 气泡的状态 */
     private int mState;
     /* 默认，无法拖拽 */
@@ -97,43 +111,82 @@ public class DragBubbleView extends View {
     public DragBubbleView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         TypedArray ta = context.obtainStyledAttributes(attrs, R.styleable.DragBubbleView, defStyleAttr, 0);
-        mBubbleRadius = ta.getDimension(R.styleable.DragBubbleView_bubbleRadius, DensityUtils.dp2px(context, 16));
+        mBubbleRadius = ta.getDimension(R.styleable.DragBubbleView_bubbleRadius, DensityUtils.dp2px(context, 12));
         mBubbleColor = ta.getColor(R.styleable.DragBubbleView_bubbleColor, Color.RED);
         mText = ta.getString(R.styleable.DragBubbleView_text);
-        mTextSize = ta.getDimension(R.styleable.DragBubbleView_textSize, DensityUtils.dp2px(context, 16));
+        mTextSize = ta.getDimension(R.styleable.DragBubbleView_textSize, DensityUtils.dp2px(context, 12));
         mTextColor = ta.getColor(R.styleable.DragBubbleView_textColor, Color.WHITE);
         mState = STATE_DEFAULT;
         mCircleRadius = mBubbleRadius;
-        maxD = 5 * mBubbleRadius;
+        maxD = 8 * mBubbleRadius;
         ta.recycle();
 
         mBubblePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mBubblePaint.setColor(mBubbleColor);
         mBubblePaint.setStyle(Paint.Style.FILL);
 
+        mBezierPath = new Path();
+
         mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mTextPaint.setColor(mTextColor);
+        mTextPaint.setTextSize(mTextSize);
         mTextRect = new Rect();
 
-        mBezierPath = new Path();
+        mExplosionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mExplosionPaint.setFilterBitmap(true);
+        mExplosionRect = new Rect();
+        mExplosionBitmaps = new Bitmap[mExplosionDrawables.length];
+        for (int i = 0; i < mExplosionDrawables.length; i++) {
+            //将气泡爆炸的drawable转为bitmap
+            Bitmap bitmap = BitmapFactory.decodeResource(getResources(), mExplosionDrawables[i]);
+            mExplosionBitmaps[i] = bitmap;
+        }
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        setMeasuredDimension(measuredDimension(widthMeasureSpec), measuredDimension(heightMeasureSpec));
+    }
+
+    private int measuredDimension(int measureSpec) {
+        int result;
+        int mode = MeasureSpec.getMode(measureSpec);
+        int size = MeasureSpec.getSize(measureSpec);
+        if (mode == MeasureSpec.EXACTLY) {
+            result = size;
+        } else {
+            result = (int) (2 * mBubbleRadius);
+            if (mode == MeasureSpec.AT_MOST) {
+                result = Math.min(result, size);
+            }
+        }
+        return result;
     }
 
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+        initData(w, h);
+    }
+
+    private void initData(int w, int h) {
+        //设置圆心坐标
         mBubbleCenterX = w / 2;
         mBubbleCenterY = h / 2;
         mCircleCenterX = mBubbleCenterX;
         mCircleCenterY = mBubbleCenterY;
+        mState = STATE_DEFAULT;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         //画拖拽气泡
-        canvas.drawCircle(mBubbleCenterX, mBubbleCenterY, mBubbleRadius, mBubblePaint);
+        if (mState != STATE_DISMISS) {
+            canvas.drawCircle(mBubbleCenterX, mBubbleCenterY, mBubbleRadius, mBubblePaint);
+        }
 
-        if (mState == STATE_DRAG && d < maxD - 48) {
+        if (mState == STATE_DRAG && d < maxD - maxD / 4) {
             //画黏连小圆
             canvas.drawCircle(mCircleCenterX, mCircleCenterY, mCircleRadius, mBubblePaint);
             //计算控制点坐标，为两圆圆心连线的中点
@@ -161,9 +214,16 @@ public class DragBubbleView extends View {
         }
         //画消息个数的文本
         if (mState != STATE_DISMISS && !TextUtils.isEmpty(mText)) {
-            mTextPaint.setTextSize(mTextSize);
             mTextPaint.getTextBounds(mText, 0, mText.length(), mTextRect);
             canvas.drawText(mText, mBubbleCenterX - mTextRect.width() / 2, mBubbleCenterY + mTextRect.height() / 2, mTextPaint);
+        }
+
+        if (mIsExplosionAnimStart && mCurExplosionIndex < mExplosionDrawables.length) {
+            //设置气泡爆炸图片的位置
+            mExplosionRect.set((int) (mBubbleCenterX - mBubbleRadius), (int) (mBubbleCenterY - mBubbleRadius)
+                    , (int) (mBubbleCenterX + mBubbleRadius), (int) (mBubbleCenterY + mBubbleRadius));
+            //根据当前进行到爆炸气泡的位置index来绘制爆炸气泡bitmap
+            canvas.drawBitmap(mExplosionBitmaps[mCurExplosionIndex], null, mExplosionRect, mExplosionPaint);
         }
     }
 
@@ -173,9 +233,9 @@ public class DragBubbleView extends View {
             case MotionEvent.ACTION_DOWN:
                 if (mState != STATE_DISMISS) {
                     d = (float) Math.hypot(event.getX() - mBubbleCenterX, event.getY() - mBubbleCenterY);
-                    if (d < mBubbleRadius + 48) {
+                    if (d < mBubbleRadius + maxD / 4) {
                         //当指尖坐标在圆内的时候，才认为是可拖拽的
-                        //一般气泡比较小，增加48像素是为了更轻松的拖拽
+                        //一般气泡比较小，增加(maxD/4)像素是为了更轻松的拖拽
                         mState = STATE_DRAG;
                     } else {
                         mState = STATE_DEFAULT;
@@ -191,12 +251,16 @@ public class DragBubbleView extends View {
 //                float d = (float) Math.sqrt(Math.pow(mBubbleCenterX - mCircleCenterX, 2) + Math.pow(mBubbleCenterY - mCircleCenterY, 2));
                     if (mState == STATE_DRAG) {//如果可拖拽
                         //间距小于可黏连的最大距离
-                        if (d < maxD - 48) {// 减48像素是为了让黏连小球半径到一个较小值快消失时直接消失
-                            mCircleRadius = mBubbleRadius - d / 5;//使黏连小球半径渐渐变小
-                            mOnBubbleStateListener.onDrag();
+                        if (d < maxD - maxD / 4) {//减去(maxD/4)的像素大小，是为了让黏连小球半径到一个较小值快消失时直接消失
+                            mCircleRadius = mBubbleRadius - d / 8;//使黏连小球半径渐渐变小
+                            if (mOnBubbleStateListener != null) {
+                                mOnBubbleStateListener.onDrag();
+                            }
                         } else {//间距大于于可黏连的最大距离
                             mState = STATE_MOVE;//改为移动状态
-                            mOnBubbleStateListener.onMove();
+                            if (mOnBubbleStateListener != null) {
+                                mOnBubbleStateListener.onMove();
+                            }
                         }
                     }
                     invalidate();
@@ -205,8 +269,13 @@ public class DragBubbleView extends View {
             case MotionEvent.ACTION_UP:
                 if (mState == STATE_DRAG) {//正在拖拽时松开手指，气泡恢复原来位置并颤动一下
                     setBubbleRestoreAnim();
-                } else if (mState == STATE_MOVE) {//正在移动时松开手指，气泡消失
-                    setBubbleDismissAnim();
+                } else if (mState == STATE_MOVE) {//正在移动时松开手指
+                    //如果在移动状态下间距回到两倍半径之内，我们认为用户不想取消该气泡
+                    if (d < 2 * mBubbleRadius) {//那么气泡恢复原来位置并颤动一下
+                        setBubbleRestoreAnim();
+                    } else {//气泡消失
+                        setBubbleDismissAnim();
+                    }
                 }
                 break;
         }
@@ -244,7 +313,9 @@ public class DragBubbleView extends View {
             public void onAnimationEnd(Animator animation) {
                 //动画结束后状态改为默认
                 mState = STATE_DEFAULT;
-                mOnBubbleStateListener.onRestore();
+                if (mOnBubbleStateListener != null) {
+                    mOnBubbleStateListener.onRestore();
+                }
             }
         });
         animY.start();
@@ -254,21 +325,28 @@ public class DragBubbleView extends View {
      * 设置气泡消失的动画
      */
     private void setBubbleDismissAnim() {
-        ValueAnimator anim = ValueAnimator.ofFloat(mBubbleRadius, 0);
-        anim.setDuration(200);
-        anim.setInterpolator(new AnticipateOvershootInterpolator(3));
+        mState = STATE_DISMISS;//气泡改为消失状态
+        mIsExplosionAnimStart = true;
+        if (mOnBubbleStateListener != null) {
+            mOnBubbleStateListener.onDismiss();
+        }
+        //做一个int型属性动画，从0开始，到气泡爆炸图片数组个数结束
+        ValueAnimator anim = ValueAnimator.ofInt(0, mExplosionDrawables.length);
+        anim.setInterpolator(new LinearInterpolator());
+        anim.setDuration(500);
         anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
-                mBubbleRadius = (float) animation.getAnimatedValue();
+                //拿到当前的值并重绘
+                mCurExplosionIndex = (int) animation.getAnimatedValue();
                 invalidate();
             }
         });
         anim.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
-                mState = STATE_DISMISS;//气泡改为消失状态
-                mOnBubbleStateListener.onDismiss();
+                //动画结束后改变状态
+                mIsExplosionAnimStart = false;
             }
         });
         anim.start();
@@ -304,5 +382,23 @@ public class DragBubbleView extends View {
      */
     public void setOnBubbleStateListener(OnBubbleStateListener onBubbleStateListener) {
         mOnBubbleStateListener = onBubbleStateListener;
+    }
+
+    /**
+     * 设置气泡消息个数文本
+     *
+     * @param text 消息个数文本
+     */
+    public void setText(String text) {
+        mText = text;
+        invalidate();
+    }
+
+    /**
+     * 重新生成气泡
+     */
+    public void reCreate() {
+        initData(getWidth(), getHeight());
+        invalidate();
     }
 }
