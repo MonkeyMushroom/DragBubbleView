@@ -10,7 +10,7 @@
 
 ![image](https://github.com/MonkeyMushroom/DragBubbleView/raw/master/2.gif)
 
-关于如何让控件不拘泥于本身大小，只需在控件父布局添加 android:clipChildren = false 即可
+关于如何让控件不拘泥于本身大小，只需在控件父布局添加 android:clipChildren = "false" 即可
 
 代码步骤博客地址：http://blog.csdn.net/qq_31715429/article/details/54386934
 
