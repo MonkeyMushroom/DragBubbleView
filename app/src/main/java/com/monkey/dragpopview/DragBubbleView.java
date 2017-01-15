@@ -11,6 +11,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PointF;
 import android.graphics.Rect;
 import android.text.TextUtils;
 import android.util.AttributeSet;
@@ -286,29 +287,22 @@ public class DragBubbleView extends View {
      * 设置气泡复原的动画
      */
     private void setBubbleRestoreAnim() {
-        ValueAnimator animX = ValueAnimator.ofFloat(mBubbleCenterX, mCircleCenterX);
-        animX.setDuration(200);
+        ValueAnimator anim = ValueAnimator.ofObject(new PointFEvaluator(),
+                new PointF(mBubbleCenterX, mBubbleCenterY),
+                new PointF(mCircleCenterX, mCircleCenterY));
+        anim.setDuration(200);
         //使用OvershootInterpolator差值器达到颤动效果
-        animX.setInterpolator(new OvershootInterpolator(4));
-        animX.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+        anim.setInterpolator(new OvershootInterpolator(5));
+        anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
-                mBubbleCenterX = (float) animation.getAnimatedValue();
+                PointF curPoint = (PointF) animation.getAnimatedValue();
+                mBubbleCenterX = curPoint.x;
+                mBubbleCenterY = curPoint.y;
                 invalidate();
             }
         });
-        animX.start();
-        ValueAnimator animY = ValueAnimator.ofFloat(mBubbleCenterY, mCircleCenterY);
-        animY.setDuration(200);
-        animY.setInterpolator(new OvershootInterpolator(4));
-        animY.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator animation) {
-                mBubbleCenterY = (float) animation.getAnimatedValue();
-                invalidate();
-            }
-        });
-        animY.addListener(new AnimatorListenerAdapter() {
+        anim.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationEnd(Animator animation) {
                 //动画结束后状态改为默认
@@ -318,7 +312,7 @@ public class DragBubbleView extends View {
                 }
             }
         });
-        animY.start();
+        anim.start();
     }
 
     /**
