@@ -1,4 +1,4 @@
-package com.monkey.dragpopview;
+package com.monkey.dragbubbleview;
 
 import android.animation.TypeEvaluator;
 import android.graphics.PointF;
