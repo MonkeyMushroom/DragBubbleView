@@ -2,6 +2,7 @@ package com.monkey.dragbubbleview;
 
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
+import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -18,7 +19,6 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
-import android.view.animation.OvershootInterpolator;
 
 /**
  * 仿qq消息气泡
@@ -294,9 +294,16 @@ public class DragBubbleView extends View {
         ValueAnimator anim = ValueAnimator.ofObject(new PointFEvaluator(),
                 new PointF(mBubbleCenterX, mBubbleCenterY),
                 new PointF(mCircleCenterX, mCircleCenterY));
-        anim.setDuration(200);
-        //使用OvershootInterpolator差值器达到颤动效果
-        anim.setInterpolator(new OvershootInterpolator(5));
+        anim.setDuration(500);
+        //自定义Interpolator差值器达到颤动效果
+        anim.setInterpolator(new TimeInterpolator() {
+            @Override
+            public float getInterpolation(float input) {
+                //http://inloop.github.io/interpolator/
+                float f = 0.571429f;
+                return (float) (Math.pow(2, -4 * input) * Math.sin((input - f / 4) * (2 * Math.PI) / f) + 1);
+            }
+        });
         anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {

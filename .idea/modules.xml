@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/DragPopView.iml" filepath="$PROJECT_DIR$/DragPopView.iml" />
+      <module fileurl="file://$PROJECT_DIR$/DragBubbleView.iml" filepath="$PROJECT_DIR$/DragBubbleView.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>
